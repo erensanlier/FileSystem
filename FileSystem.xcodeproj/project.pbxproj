@@ -23,8 +23,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		467BDE1A24857BDE0003968E /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		46E3F316247E70C700AFB06A /* FileSystem */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = FileSystem; sourceTree = BUILT_PRODUCTS_DIR; };
 		46E3F319247E70C700AFB06A /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		46E3F32C2481CEBD00AFB06A /* input_1024_200_5_9_9.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = input_1024_200_5_9_9.txt; sourceTree = "<group>"; };
+		46E3F32D2481CEBD00AFB06A /* input_1024_200_9_0_0.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = input_1024_200_9_0_0.txt; sourceTree = "<group>"; };
+		46E3F32E2481CEBD00AFB06A /* input_8_600_5_5_0.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = input_8_600_5_5_0.txt; sourceTree = "<group>"; };
+		46E3F32F2481CEBD00AFB06A /* input_2048_600_5_5_0.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = input_2048_600_5_5_0.txt; sourceTree = "<group>"; };
+		46E3F3302481CEBD00AFB06A /* input_1024_200_9_0_9.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = input_1024_200_9_0_9.txt; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,7 +63,13 @@
 		46E3F318247E70C700AFB06A /* FileSystem */ = {
 			isa = PBXGroup;
 			children = (
+				46E3F32E2481CEBD00AFB06A /* input_8_600_5_5_0.txt */,
+				46E3F32C2481CEBD00AFB06A /* input_1024_200_5_9_9.txt */,
+				46E3F32D2481CEBD00AFB06A /* input_1024_200_9_0_0.txt */,
+				46E3F3302481CEBD00AFB06A /* input_1024_200_9_0_9.txt */,
+				46E3F32F2481CEBD00AFB06A /* input_2048_600_5_5_0.txt */,
 				46E3F319247E70C700AFB06A /* main.cpp */,
+				467BDE1A24857BDE0003968E /* README.md */,
 			);
 			path = FileSystem;
 			sourceTree = "<group>";
