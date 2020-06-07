@@ -33,7 +33,7 @@ typedef struct DirectoryEntry{
 
 
 std::unordered_map<int, DirectoryEntry> directoryTable;
-int FAT[32768];
+int* FAT;
 
 
 
@@ -72,7 +72,7 @@ class ContigiousAllocator : public Allocator {
         }
         
         int last_fileend = 0;
-        
+        //going through holes to find the first fit
         while(1){
             int left_gap = entry->start_index - last_fileend;
             if(left_gap >= file_length) return last_fileend;
@@ -106,6 +106,7 @@ class ContigiousAllocator : public Allocator {
         return next_entry;
     }
     
+    //Shifts given entry to left one by one
     void shiftFile(DirectoryEntry *entry, int shift_amt){
         int start = entry->start_index;
         int file_size = entry->file_size;
@@ -131,7 +132,7 @@ class ContigiousAllocator : public Allocator {
         
         int last_fileend = 0;
         DirectoryEntry *next;
-        
+        //find gaps and move next files to left
         while(1){
             int shift_left = entry->start_index - last_fileend;
             if(shift_left > 0) shiftFile(entry, shift_left);
@@ -160,6 +161,7 @@ public:
             remainingSpace -= file_length;
              return start_index;
          }else{
+             //if there is space and we couldn't find a fit, defrag will solve our problems
              defragmentation();
              start_index = firstFitFinder(file_length);
              if(start_index >= 0){
@@ -178,6 +180,7 @@ public:
     }
     
     virtual int access(int file_id, int byte_offset){
+        //Access is trivial since file is contigious
         std::unordered_map<int, DirectoryEntry>::iterator it = directoryTable.find(file_id);
         if(it == directoryTable.end()) return -1;
         DirectoryEntry *entry = &it->second;
@@ -189,6 +192,8 @@ public:
     }
     
     virtual int extend(int file_id, int extension){
+        
+        //IMPORTANT: This method contains several control points. If we fail in one we move on to second. In rare cases we can't extend even if we have space. Details are covered very carefully.
         
         //No space left, return error
         if(remainingSpace < extension) return -1;
@@ -290,6 +295,8 @@ public:
 
 class LinkedAllocator : public Allocator {
     
+    
+    //Goes through the directory to find available blocks
     int findAvailableBlock(){
         if(remainingSpace == 0) return -1;
         int i = 0;
@@ -298,6 +305,8 @@ class LinkedAllocator : public Allocator {
         }
         return i;
     }
+    
+    //returns the index of the end block of a file
     int findFileEnd(DirectoryEntry* entry){
         int index = entry->start_index;
         int file_size = entry->file_size;
@@ -309,6 +318,8 @@ class LinkedAllocator : public Allocator {
     
     
 public:
+    
+    //Find available block and allocate it
     virtual int create_file(int file_id, int file_length){
         if(remainingSpace < file_length) return -1;
         int last_block = findAvailableBlock();
@@ -329,13 +340,15 @@ public:
         return 1;
     }
     
+    //Access is much harder in linked, 
     virtual int access(int file_id, int byte_offset){
-        int block_number = byte_offset / BLOCK_SIZE; // Although we use 4 bytes of block for FAT, the user sees reduced size.
+        int block_number = byte_offset / BLOCK_SIZE;
         std::unordered_map<int, DirectoryEntry>::iterator it = directoryTable.find(file_id);
         if(it == directoryTable.end()) return -1;
         DirectoryEntry *entry = &it->second;
         int index = entry->start_index;
         if(block_number <= entry->file_size){
+            //Go through FAT, until we reach the requested block.
             for(int i = 1; i < block_number; i++){
                 index = FAT[index];
             }
@@ -344,6 +357,8 @@ public:
     }
     
     virtual int extend(int file_id, int extension){
+        
+        //Extend in Linked is trivial
         if(remainingSpace < extension) return -1;
         std::unordered_map<int, DirectoryEntry>::iterator it = directoryTable.find(file_id);
         if(it == directoryTable.end()) return -1;
@@ -351,6 +366,7 @@ public:
         DirectoryEntry *entry = &it->second;
         int file_end = findFileEnd(entry);
         
+        //We find available block, register it to FAT, fill the directoryContent and repeat.
         for(int i = 0; i < extension; i++){
             int block = findAvailableBlock();
             FAT[file_end] = block;
@@ -363,11 +379,13 @@ public:
     }
     
     virtual int shrink(int file_id, int shrinking){
+        //Check if file exists
         std::unordered_map<int, DirectoryEntry>::iterator it = directoryTable.find(file_id);
         if(it == directoryTable.end()) return -1;
         DirectoryEntry *entry = &it->second;
         int file_size = entry->file_size;
-        if(shrinking < entry->file_size){ // shrink by the given value
+        //Checking the file size here, if smaller or equal than shrinking variable, we reject, otherwise we go to the point where shrink starts, and then start modifying both Directory content and FAT
+        if(shrinking < entry->file_size){
             int index = entry->start_index;
             for(int i = 1; i < file_size - shrinking; i++){
                 index = FAT[index];
@@ -387,7 +405,7 @@ public:
     }
 };
 
-
+//Simple method that parses commands with string manupilation
 void parseAndExec(Allocator *a, std::string command){
     std::string delimiter = ":";
     size_t pos = command.find(delimiter);
@@ -449,8 +467,9 @@ int main(int argc, const char * argv[]) {
         a = new ContigiousAllocator;
     }else if(!method_input.compare("-l")){
         remainingSpace -= DIRECTORY_SIZE * 4 / BLOCK_SIZE;
-        BLOCK_SIZE -= 4; //The space required for pointers
-        for(int i = 0; i < sizeof(FAT) / sizeof(int); i++){
+        DIRECTORY_SIZE = remainingSpace;
+        FAT = (int *)malloc(sizeof(int)*remainingSpace);
+        for(int i = 0; i < sizeof(*FAT) / sizeof(int); i++){
             FAT[i] = -1;
         }
         std::cout << "Linked" << std::endl;
@@ -477,112 +496,6 @@ int main(int argc, const char * argv[]) {
     std::cout << "\nElapsed time: " << elapsed.count() << " s\nCreate Errors: " << createError << " Extend Errors: " << extendError;
     
     fileOp.close();
-    
-    /*
-    std::cout << "-----------------------Write Test---------------------" << std::endl;
-    for(int i = 0; i < 8; i++){
-        a->create_file(i, 4);
-        std::cout << "Directory Content ->" << std::endl;
-        for(int i = 0; i < 50; i++){
-            std::cout << directoryContent[i] << " ";
-        }
-        std::cout << std::endl;
-        std::unordered_map<int, DirectoryEntry>::iterator it;
-        std::cout << "Directory Table ->" << std::endl;
-        for (it = directoryTable.begin(); it != directoryTable.end(); it++){
-            std::cout << it->first << " - " << it->second.start_index << " : " << it->second.file_size << " | " ;
-        }
-        std::cout << std::endl << "FAT ->" << std::endl;
-        for(int i = 0; i < 50; i++) std::cout << FAT[i] << " ";
-        std::cout << std::endl;
-    }
-    std::cout << "------------------------------------------------------" << std::endl;
-    std::cout << "-----------------------Extend Test---------------------" << std::endl;
-    for(int i = 0; i < 8; i++){
-        a->extend(i, 2);
-        std::cout << "Directory Content ->" << std::endl;
-        for(int i = 0; i < 50; i++){
-            std::cout << directoryContent[i] << " ";
-        }
-        std::cout << std::endl;
-        std::unordered_map<int, DirectoryEntry>::iterator it;
-        std::cout << "Directory Table ->" << std::endl;
-        for (it = directoryTable.begin(); it != directoryTable.end(); it++){
-            std::cout << it->first << " - " << it->second.start_index << " : " << it->second.file_size << " | " ;
-        }
-        std::cout << std::endl << "FAT ->" << std::endl;
-        for(int i = 0; i < 50; i++) std::cout << FAT[i] << " ";
-        std::cout << std::endl;
-    }
-    
-    std::cout << "------------------------------------------------------" << std::endl;
-    
-    std::cout << "-----------------------Shrink Test---------------------" << std::endl;
-    for(int i = 0; i < 8; i++){
-        a->shrink(i, 3);
-        std::cout << "Directory Content ->" << std::endl;
-        for(int i = 0; i < 50; i++){
-            std::cout << directoryContent[i] << " ";
-        }
-        std::cout << std::endl;
-        std::unordered_map<int, DirectoryEntry>::iterator it;
-        std::cout << "Directory Table ->" << std::endl;
-        for (it = directoryTable.begin(); it != directoryTable.end(); it++){
-            std::cout << it->first << " - " << it->second.start_index << " : " << it->second.file_size << " | " ;
-        }
-        std::cout << std::endl << "FAT ->" << std::endl;
-        for(int i = 0; i < 50; i++) std::cout << FAT[i] << " ";
-        std::cout << std::endl;
-    }
-    std::cout << "------------------------------------------------------" << std::endl;
-
-    
-    std::cout << "-----------------------Extend Test---------------------" << std::endl;
-    for(int i = 0; i < 32; i++){
-        a->extend(i, 2);
-        std::cout << std::endl;
-        std::unordered_map<int, DirectoryEntry>::iterator it;
-        for (it = directoryTableContigious.begin(); it != directoryTableContigious.end(); it++){
-            std::cout << it->first << " - " << it->second.start_index << " : " << it->second.file_size << " | " ;
-        }
-        std::cout << std::endl;
-    }
-    
-    std::cout << "------------------------------------------------------" << std::endl;
-    
-    std::cout << "-----------------------Extend Test 2---------------------" << std::endl;
    
-    a->extend(0, 32);
-    std::cout << std::endl;
-    std::unordered_map<int, DirectoryEntry>::iterator it;
-    for (it = directoryTableContigious.begin(); it != directoryTableContigious.end(); it++){
-        std::cout << it->first << " - " << it->second.start_index << " : " << it->second.file_size << " | " ;
-    }
-    std::cout << std::endl;
-    
-    
-    std::cout << "------------------------------------------------------" << std::endl;
-    
-    
-    std::cout << "-----------------------Defrag Test---------------------" << std::endl;
-    std::cout << "Before: ";
-    for(int i = 0; i < 80; i++){
-        std::cout << directoryContent[i] << " ";
-    }
-    a->defragmentation();
-    std::cout << std::endl << "After: ";
-    for(int i = 0; i < 80; i++){
-        std::cout << directoryContent[i] << " ";
-    }
-    std::cout << std::endl;
-    for (it = directoryTableContigious.begin(); it != directoryTableContigious.end(); it++){
-        std::cout << it->first << " - " << it->second.start_index << " : " << it->second.file_size << " | " ;
-    }
-    std::cout << std::endl;
-    
-    std::cout << "------------------------------------------------------" << std::endl;
-
-    */
-    
     return 0;
 }
